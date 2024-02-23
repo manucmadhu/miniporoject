@@ -120,8 +120,8 @@ USE_TZ = True
 
 STATIC_URL = '/static/'
 
-EMAIL_ADDRESS = "sng21cs068@sngce.ac.in"
-EMAIL_PASSWORD = "Sngcedomain1#"
+EMAIL_ADDRESS = ""
+EMAIL_PASSWORD = ""
 TRANSACTIONS_PER_BLOCK = 1
 
 # PUZZLE
