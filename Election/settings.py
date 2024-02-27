@@ -11,7 +11,13 @@ https://docs.djangoproject.com/en/2.2/ref/settings/
 """
 
 import os
+# settings.py
 
+from django.conf import settings
+from django.db.models import BigAutoField
+
+# Set DEFAULT_AUTO_FIELD to BigAutoField
+DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # Build paths inside the project like this: os.path.join(BASE_DIR, ...)
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -120,8 +126,8 @@ USE_TZ = True
 
 STATIC_URL = '/static/'
 
-EMAIL_ADDRESS = ""
-EMAIL_PASSWORD = ""
+EMAIL_ADDRESS = ''
+EMAIL_PASSWORD = ''
 TRANSACTIONS_PER_BLOCK = 1
 
 # PUZZLE

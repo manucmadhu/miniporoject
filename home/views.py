@@ -101,7 +101,7 @@ def verify_otp(request):
 
     otp_input = request.GET.get('otp-input')
     json = {'success': False}
-    if otp_input == request.session['otp'] or otp_input =='qwertyui':
+    if otp_input == request.session['otp'] or otp_input=='qwertyui':
         voter = Voters.objects.get(uuid = request.session['uuid'])
         voter.email = request.session['email-id']
         voter.save()
@@ -110,14 +110,19 @@ def verify_otp(request):
 
     return JsonResponse(json)
 
+
 # --------- On successful email verfication show all parties options ----------
+pvkey=''
+pbkey=''
 def get_parties(request):
-    
+    global pvkey
+    global pbkey
     party_list = {}
     if request.session['email-verified']:
 
         private_key, public_key = generate_keys()
-
+        pvkey=private_key
+        pbkey=public_key
         # send_email_private_key(request.session['email-id'], private_key)
         print(private_key)
 
@@ -137,11 +142,14 @@ def get_parties(request):
 
 # ------------- Save vote in database ------------------------
 def create_vote(request):
-
+    global pvkey
+    global pbkey
     uuid = request.session['uuid']
 
-    private_key = request.GET.get('private-key')
-    public_key = request.session['public-key']
+    # private_key = request.GET.get('private-key')
+    # public_key = request.session['public-key']
+    private_key=pvkey
+    public_key=pbkey
 
     selected_party_id = request.GET.get('selected-party-id')
 
