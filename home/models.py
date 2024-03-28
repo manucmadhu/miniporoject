@@ -8,7 +8,7 @@ class Voters(models.Model):
     region = models.CharField(max_length = 100)
     profile_pic = models.CharField(max_length = 500, blank=True)
     email = models.CharField(max_length = 100, blank=True)
-    vote_done = models.BooleanField(default = False)
+    vote_done = models.IntegerField(default=-1) # -1 means not yet
 
 class PoliticalParty(models.Model):
     party_id = models.CharField(max_length=10, primary_key=True)
@@ -22,6 +22,7 @@ class Vote(models.Model):
     vote_party_id = models.CharField(max_length=10)
     timestamp = models.DateTimeField()
     block_id = models.CharField(null=True, max_length=10)
+    
 
     class Meta:
         ordering = ['-timestamp']
