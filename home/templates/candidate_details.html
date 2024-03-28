@@ -39,7 +39,7 @@
         <div class="associated-email-id">
             <input class="email-input" id="email-input" value="{{ details.email }}" disabled placeholder="Email-ID">
             <img id="verified-badge" src="{% static 'images/verified.png' %}">
-            <a class="button" id="change-email">Change</a>
+            {% comment %} <a class="button" id="change-email">Change</a> {% endcomment %}
             <a class="button" id="send-otp">Send OTP</a>
         </div>
     </div>

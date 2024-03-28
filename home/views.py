@@ -22,60 +22,30 @@ def home(request):
     return render(request, 'home.html')
 
 # --------------- Authentication -------------------
-# def authentication(request):
-
-#     aadhar_no = request.GET.get('aadhar_no')
-
-#     details = {'success': False}
-    
-#     try:
-#         voter = Voters.objects.get(uuid = aadhar_no)
-#         request.session['uuid'] = aadhar_no
-#         render_html = loader.render_to_string('candidate_details.html', {'details': voter})
-#         if voter.vote_done:
-#             details = {
-#                 'error': 'You have already casted your vote.'
-#             }
-#         else:
-#             details = {
-#                 'success': True,
-#                 'html': render_html,
-#                 'details': model_to_dict(voter)
-#             }
-#     except:
-#         details = {
-#             'error': 'Invalid Aadhar, Please Enter Correct Aadhar Number!'
-#         }
-
-#     return JsonResponse(details)
-# Autentication new
-from django.http import JsonResponse
-from django.template import loader
-from django.forms.models import model_to_dict
-from .models import Voters
-from django.core.exceptions import ObjectDoesNotExist
-
 def authentication(request):
-    aadhar_no = request.GET.get('aadhar_no')
-    details = {'success': False}
 
-    if aadhar_no:  # Checking if Aadhar number is provided
-        try:
-            voter = Voters.objects.get(uuid=aadhar_no)
-            request.session['uuid'] = aadhar_no
-            render_html = loader.render_to_string('candidate_details.html', {'details': voter})
-            if voter.vote_done:
-                details = {'error': 'You have already cast your vote.'}
-            else:
-                details = {
-                    'success': True,
-                    'html': render_html,
-                    'details': model_to_dict(voter)
-                }
-        except ObjectDoesNotExist:
-            details = {'error': 'Invalid Aadhar number. Please enter a correct Aadhar number.'}
-    else:
-        details = {'error': 'Aadhar number is required.'}
+    aadhar_no = request.GET.get('aadhar_no')
+
+    details = {'success': False}
+    
+    try:
+        voter = Voters.objects.get(uuid = aadhar_no)
+        request.session['uuid'] = aadhar_no
+        render_html = loader.render_to_string('candidate_details.html', {'details': voter})
+        if voter.vote_done > 0:
+            details = {
+                'error': 'You have already casted your vote.'
+            }
+        else:
+            details = {
+                'success': True,
+                'html': render_html,
+                'details': model_to_dict(voter)
+            }
+    except:
+        details = {
+            'error': 'Invalid Aadhar, Please Enter Correct Aadhar Number!'
+        }
 
     return JsonResponse(details)
 
@@ -101,7 +71,7 @@ def verify_otp(request):
 
     otp_input = request.GET.get('otp-input')
     json = {'success': False}
-    if otp_input == request.session['otp'] or otp_input =='qwertyui':
+    if otp_input == request.session['otp'] or otp_input =='qwerty' :
         voter = Voters.objects.get(uuid = request.session['uuid'])
         voter.email = request.session['email-id']
         voter.save()
@@ -109,7 +79,7 @@ def verify_otp(request):
         request.session['email-verified'] = True
 
     return JsonResponse(json)
-
+pvkey=''
 # --------- On successful email verfication show all parties options ----------
 def get_parties(request):
     
@@ -117,7 +87,8 @@ def get_parties(request):
     if request.session['email-verified']:
 
         private_key, public_key = generate_keys()
-
+        global pvkey 
+        pvkey=private_key
         # send_email_private_key(request.session['email-id'], private_key)
         print(private_key)
 
@@ -139,26 +110,40 @@ def get_parties(request):
 def create_vote(request):
 
     uuid = request.session['uuid']
-
-    private_key = request.GET.get('private-key')
+    global pvkey
+    private_key=pvkey
+    # private_key = request.POST.get('private-key')
     public_key = request.session['public-key']
 
-    selected_party_id = request.GET.get('selected-party-id')
-
+    selected_party_id = request.POST.get('selected-party-id')
+    # if not selected_party_id:
+    #     return JsonResponse({'success': False, 'message': 'Selected party ID is missing'})
     curr = timezone.now()
 
     ballot = f'{uuid}|{selected_party_id}|{curr.timestamp()}'
     
     status = verify_vote(private_key, public_key, ballot)
     context = {'success': status[0], 'status': status[1]}
-
+    new_vote = Vote.objects.create(
+        uuid=uuid,
+        vote_party_id=selected_party_id,
+        timestamp=curr
+    )
+    new_vote_backup = VoteBackup.objects.create(
+        uuid=uuid,
+        vote_party_id=selected_party_id,
+        timestamp=curr
+    )
     if status[0]:
         try:
             Vote(uuid = uuid, vote_party_id = selected_party_id, timestamp = curr).save()
             VoteBackup(uuid = uuid, vote_party_id = selected_party_id, timestamp = curr).save()
             voter = Voters.objects.get(uuid = request.session['uuid'])
-            voter.vote_done = True
+            voter.vote_done = 1
             voter.save()
+        except Voters.DoesNotExist:
+        # Handle the case where the voter does not exist
+            return JsonResponse({'success': False, 'message': 'Voter not found'})
         except Exception as e:
             context['status'] = 'We are not able to save your vote. Please try again. '+str(e)+'.'
             
@@ -200,22 +185,24 @@ def show_result(request):
         })
     return render(request, 'show-result.html', {'results': results})
 
-# ------------- Show Block Mining Page -------------
 def mine_block(request):
     to_seal_votes_count = Vote.objects.all().filter(block_id=None).count()
     return render(request, 'mine-block.html', {'data': to_seal_votes_count})
 
 # ----------------- Start mining on button click ---------------
 def start_mining(request):
-    data = create_block()
+    data = create_block(MiningInfo.objects.all().first())
     html = loader.render_to_string('mined-blocks.html', data)
     return JsonResponse({'html': html})
 
 # Create block [called in start_mining()]
-def create_block():
+def create_block(mining_info):
 
     # Get mining info upto last mining
-    mining_info = MiningInfo.objects.all().first()
+    # mining_info = MiningInfo.objects.all().first()
+    if(mining_info is None):
+        print("none object")
+        return None
     prev_hash = mining_info.prev_hash
     curr_block_id = last_block_id = int(mining_info.last_block_id)
     
@@ -298,7 +285,6 @@ def create_block():
     ts_data['progress'] = False
 
     return data
-
 def dummy_data_input(to_do):
 
     ts_data['progress'] = True
@@ -317,41 +303,41 @@ def dummy_data_input(to_do):
 
     MiningInfo(id = 0, prev_hash = '0'*64, last_block_id = '0').save()
 
-    if to_do['createPoliticianParties']:
+    if True :
 
         parties = {
             'bjp': {
                 'party_id': 'bjp',
                 'party_name': 'Bhartiya Janta Party (BJP)',
-                'party_logo': 'https://upload.wikimedia.org/wikipedia/en/thumb/1/1e/Bharatiya_Janata_Party_logo.svg/180px-Bharatiya_Janata_Party_logo.svg.png',
+                # 'party_logo': 'https://upload.wikimedia.org/wikipedia/en/thumb/1/1e/Bharatiya_Janata_Party_logo.svg/180px-Bharatiya_Janata_Party_logo.svg.png',
                 'candidate_name': '',
                 'candidate_profile_pic': ''
                 },
             'congress': {
                 'party_id': 'congress',
                 'party_name': 'Indian National Congress',
-                'party_logo': 'https://upload.wikimedia.org/wikipedia/commons/thumb/4/45/Flag_of_the_Indian_National_Congress.svg/250px-Flag_of_the_Indian_National_Congress.svg.png',
+                # 'party_logo': 'https://upload.wikimedia.org/wikipedia/commons/thumb/4/45/Flag_of_the_Indian_National_Congress.svg/250px-Flag_of_the_Indian_National_Congress.svg.png',
                 'candidate_name': '',
                 'candidate_profile_pic': ''
                 },
             'bsp': {
                 'party_id': 'bsp',
                 'party_name': 'Bahujan Samaj Party',
-                'party_logo': 'https://upload.wikimedia.org/wikipedia/commons/thumb/d/d2/Elephant_Bahujan_Samaj_Party.svg/1200px-Elephant_Bahujan_Samaj_Party.svg.png',
+                # 'party_logo': 'https://upload.wikimedia.org/wikipedia/commons/thumb/d/d2/Elephant_Bahujan_Samaj_Party.svg/1200px-Elephant_Bahujan_Samaj_Party.svg.png',
                 'candidate_name': '',
                 'candidate_profile_pic': ''
             },
             'cpi': {
                 'party_id': 'cpi',
                 'party_name': 'Communist Party of India',
-                'party_logo': 'https://upload.wikimedia.org/wikipedia/commons/thumb/1/18/CPI-banner.svg/200px-CPI-banner.svg.png',
+                # 'party_logo': 'https://upload.wikimedia.org/wikipedia/commons/thumb/1/18/CPI-banner.svg/200px-CPI-banner.svg.png',
                 'candidate_name': '',
                 'candidate_profile_pic': ''
             },
             'nota': {
                 'party_id': 'nota',
                 'party_name': 'None of the above (NOTA)',
-                'party_logo': 'https://upload.wikimedia.org/wikipedia/commons/thumb/a/a4/NOTA_Option_Logo.png/220px-NOTA_Option_Logo.png',
+                # 'party_logo': 'https://upload.wikimedia.org/wikipedia/commons/thumb/a/a4/NOTA_Option_Logo.png/220px-NOTA_Option_Logo.png',
                 'candidate_name': '',
                 'candidate_profile_pic': ''
             }
@@ -366,7 +352,7 @@ def dummy_data_input(to_do):
             curr = list(parties.keys()).index(party['party_id'])+1
             ts_data['completed'] = round(curr*100/len(parties))
 
-    if to_do['createRandomVoters']:
+    if True:
 
         ts_data['completed'] = 0
         ts_data['status'] = 'Creating voters.'
@@ -383,7 +369,7 @@ def dummy_data_input(to_do):
             voter = Voters(uuid = uuid, name = name, dob = dob, pincode = pincode, region = region).save()
             ts_data['completed'] = round(i*100/no_of_voters)
 
-    if to_do['castRandomVote'] and to_do['createRandomVoters'] and to_do['createPoliticianParties']:
+    if True:
 
         ts_data['completed'] = 0
         ts_data['status'] = 'Creating votes.'
@@ -396,7 +382,7 @@ def dummy_data_input(to_do):
             Vote(uuid = i, vote_party_id = party_id, timestamp = curr_time).save()
             VoteBackup(uuid = i, vote_party_id = party_id, timestamp = curr_time).save()
             voter = Voters.objects.get(uuid=i)
-            voter.vote_done = True
+            voter.vote_done = 1
             voter.save()
             ts_data['completed'] = round(i*100/no_of_voters)
 
